@@ -1,5 +1,5 @@
 #!/bin/sh
-# Exercises ci/deploy-packages.sh without calling SAP.
+# Exercises ci/deploy-packages.sh without calling SAP (incl. empty value mapping skip).
 set -eu
 
 unset CDPATH
