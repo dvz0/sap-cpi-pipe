@@ -27,8 +27,8 @@ bundle_type_of() {
   ' "$1"
 }
 
-# CPI deploy of a value mapping returns HTTP 500 when an entry value is empty.
-# Skip that artifact. The rest of the package still deploys, and the job stays green.
+# CPI returns HTTP 500 when a value mapping entry has an empty <value>.
+# Skip that artifact only; the rest of the package still deploys.
 value_mapping_deployable() {
   xml="$1value_mapping.xml"
   artifact_id="$2"
