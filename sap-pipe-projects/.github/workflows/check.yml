@@ -1,0 +1,28 @@
+# Portfolio sample. Jobs are off (if: false). Nothing runs on push.
+# To enable: restore push/pull_request under on: and delete every `if: false`.
+#
+# Intended triggers:
+#   on:
+#     push:
+#     pull_request:
+
+name: check
+
+on:
+  workflow_dispatch:
+
+jobs:
+  shellcheck:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck
+      - run: shellcheck -s sh ci/deploy-packages.sh ci/test-deploy-packages.sh
+
+  test_deploy_script:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh ci/test-deploy-packages.sh
