@@ -8,3 +8,5 @@ Sample layout for syncing SAP Integration Suite design-time content with Git and
 | [`sap-pipe-projects/`](sap-pipe-projects/) | Unzipped packages/iFlows and deploy scripts |
 
 GitHub Actions under each folder are samples with jobs disabled (`if: false`) so they do not run here.
+
+See `sap-pipe/.github/workflows/` and `sap-pipe-projects/.github/workflows/` for the sample pipelines.
