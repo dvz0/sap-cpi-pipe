@@ -1,4 +1,4 @@
-# Portfolio sample. Jobs are off (if: false). Nothing runs on push.
+# Portfolio sample. Jobs stay off (if: false); nothing runs on push or dispatch.
 # To enable: restore the on: block below and delete every `if: false`.
 #
 # Intended triggers:
