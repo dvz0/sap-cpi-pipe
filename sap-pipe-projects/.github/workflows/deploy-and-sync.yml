@@ -1,4 +1,4 @@
-# Portfolio sample. Jobs are off (if: false). Nothing runs on push or schedule.
+# Portfolio sample. Jobs stay off (if: false); nothing runs on push or schedule.
 # To enable: restore the on: block below and replace each `if: false` with the
 # intended condition in the comment above that job.
 #
