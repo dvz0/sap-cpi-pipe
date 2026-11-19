@@ -363,7 +363,7 @@ def cli() -> None:
 
 @cli.group()
 def update() -> None:
-    """Create or update design-time content on the tenant."""
+    """Create or update design-time artifacts and packages on the tenant."""
 
 
 @update.command("artifact")
