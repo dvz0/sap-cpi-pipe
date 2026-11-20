@@ -64,3 +64,5 @@ Sample workflows live in [`.github/workflows/`](.github/workflows/). Jobs use `i
 3. Create GitHub Environments `dev`, `qas`, and `prod` with secrets `CPI_TMN_HOST`, `CPI_OAUTH_HOST`, `CPI_OAUTH_CLIENT_ID`, `CPI_OAUTH_CLIENT_SECRET`.
 4. Fill `packages.json`.
 5. To go live, restore the intended `on:` triggers in the workflow files and remove each `if: false`.
+
+This folder is meant as a layout sample next to `sap-pipe/`; the Actions jobs above stay disabled until you enable them.
