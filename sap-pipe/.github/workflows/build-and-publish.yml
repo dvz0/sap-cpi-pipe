@@ -1,0 +1,90 @@
+# Portfolio sample. Jobs stay off (if: false); nothing runs on push or dispatch.
+# To enable: restore the on: block below and delete every `if: false`.
+#
+# Intended triggers:
+#   on:
+#     push:
+#       branches: [main]
+#       tags: ["*"]
+#     pull_request:
+#
+# Tests the CLI, then publishes the Docker image to GHCR.
+# Pin consumers to the pyproject version tag (e.g. ghcr.io/<org>/sap-pipe:0.2.0).
+
+name: build-and-publish
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  test:
+    if: false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: System deps
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends diffutils
+      - run: uv sync --frozen
+      - run: uv run ruff check src tests
+      - run: uv run pytest -q
+      - run: uv run sap-pipe --version
+      - run: uv run sap-pipe --help
+
+  publish:
+    if: false
+    # intended: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags for this build
+        id: meta
+        run: |
+          set -eu
+          SHORT_SHA="$(echo '${{ github.sha }}' | cut -c1-8)"
+          VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml | head -1)"
+          test -n "$VERSION"
+          {
+            echo "short_sha=$SHORT_SHA"
+            echo "version=$VERSION"
+          } >> "$GITHUB_OUTPUT"
+          if [ '${{ github.ref_type }}' = 'tag' ]; then
+            echo "tags=${{ env.IMAGE }}:${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=${{ env.IMAGE }}:${SHORT_SHA},${{ env.IMAGE }}:latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+
+      - name: Publish version tag if missing
+        if: github.ref == 'refs/heads/main'
+        run: |
+          set -eu
+          IMAGE="${{ env.IMAGE }}"
+          VERSION="${{ steps.meta.outputs.version }}"
+          SHORT_SHA="${{ steps.meta.outputs.short_sha }}"
+          if docker manifest inspect "$IMAGE:$VERSION" >/dev/null 2>&1; then
+            echo "Tag $VERSION already exists. Bump version in pyproject.toml to publish a new one."
+          else
+            docker buildx imagetools create -t "$IMAGE:$VERSION" "$IMAGE:$SHORT_SHA"
+            echo "Published $IMAGE:$VERSION"
+          fi

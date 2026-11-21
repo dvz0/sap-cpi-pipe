@@ -1,0 +1,238 @@
+# Portfolio sample. Jobs stay off (if: false); nothing runs on push or schedule.
+# To enable: restore the on: block below and replace each `if: false` with the
+# intended condition in the comment above that job.
+#
+# Intended triggers:
+#   on:
+#     push:
+#       branches: [qas, main]
+#     workflow_dispatch:
+#       inputs: ... (see below)
+#     schedule:
+#       - cron: "0 2 * * *"
+#
+# Needs GitHub Environments dev / qas / prod with secrets:
+#   CPI_TMN_HOST, CPI_OAUTH_HOST, CPI_OAUTH_CLIENT_ID, CPI_OAUTH_CLIENT_SECRET
+# Pin SAP_PIPE_IMAGE to an immutable tag. Do not use :latest on QA or production.
+
+name: deploy-and-sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_package:
+        description: "Package technical name, all-packages, or empty (dev no-op / promote = changed only)"
+        required: false
+        default: ""
+      job:
+        description: "Which sample job to run"
+        type: choice
+        options:
+          - deploy_dev
+          - deploy_qas
+          - deploy_prod
+          - sync_from_tenant
+          - snapshot_tenant
+        default: deploy_dev
+
+env:
+  SAP_PIPE_IMAGE: ghcr.io/<org>/sap-pipe:0.2.0
+  PACKAGES_FILE: packages.json
+
+jobs:
+  # environment: dev — manual restore Git → development tenant
+  deploy_dev:
+    if: false
+    # intended: github.event_name == 'workflow_dispatch' && inputs.job == 'deploy_dev'
+    runs-on: ubuntu-latest
+    environment: dev
+    container:
+      image: ${{ env.SAP_PIPE_IMAGE }}
+      options: --entrypoint ""
+    env:
+      CI_PROJECT_DIR: ${{ github.workspace }}
+      CI_ENVIRONMENT_NAME: dev
+      CI_COMMIT_REF_NAME: ${{ github.ref_name }}
+      DEPLOY_PACKAGE: ${{ inputs.deploy_package }}
+      SAP_PIPE_TMN_HOST: ${{ secrets.CPI_TMN_HOST }}
+      SAP_PIPE_OAUTH_HOST: ${{ secrets.CPI_OAUTH_HOST }}
+      SAP_PIPE_OAUTH_PATH: /oauth/token
+      SAP_PIPE_OAUTH_CLIENTID: ${{ secrets.CPI_OAUTH_CLIENT_ID }}
+      SAP_PIPE_OAUTH_CLIENTSECRET: ${{ secrets.CPI_OAUTH_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require CPI secrets
+        run: |
+          if [ -z "$SAP_PIPE_TMN_HOST" ] || [ -z "$SAP_PIPE_OAUTH_HOST" ] || [ -z "$SAP_PIPE_OAUTH_CLIENTID" ] || [ -z "$SAP_PIPE_OAUTH_CLIENTSECRET" ]; then
+            echo "Missing CPI secrets for environment $CI_ENVIRONMENT_NAME"
+            exit 1
+          fi
+      - run: MODE=restore sh ci/deploy-packages.sh
+
+  # environment: qas — promote packages changed in the push
+  deploy_qas:
+    if: false
+    # intended: (push to qas) || (workflow_dispatch && inputs.job == 'deploy_qas')
+    runs-on: ubuntu-latest
+    environment: qas
+    container:
+      image: ${{ env.SAP_PIPE_IMAGE }}
+      options: --entrypoint ""
+    env:
+      CI_PROJECT_DIR: ${{ github.workspace }}
+      CI_ENVIRONMENT_NAME: qas
+      CI_COMMIT_REF_NAME: ${{ github.ref_name }}
+      CI_COMMIT_BEFORE_SHA: ${{ github.event.before }}
+      CI_COMMIT_SHA: ${{ github.sha }}
+      DEPLOY_PACKAGE: ${{ inputs.deploy_package }}
+      SAP_PIPE_TMN_HOST: ${{ secrets.CPI_TMN_HOST }}
+      SAP_PIPE_OAUTH_HOST: ${{ secrets.CPI_OAUTH_HOST }}
+      SAP_PIPE_OAUTH_PATH: /oauth/token
+      SAP_PIPE_OAUTH_CLIENTID: ${{ secrets.CPI_OAUTH_CLIENT_ID }}
+      SAP_PIPE_OAUTH_CLIENTSECRET: ${{ secrets.CPI_OAUTH_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require CPI secrets
+        run: |
+          if [ -z "$SAP_PIPE_TMN_HOST" ] || [ -z "$SAP_PIPE_OAUTH_HOST" ] || [ -z "$SAP_PIPE_OAUTH_CLIENTID" ] || [ -z "$SAP_PIPE_OAUTH_CLIENTSECRET" ]; then
+            echo "Missing CPI secrets for environment $CI_ENVIRONMENT_NAME"
+            exit 1
+          fi
+      - run: MODE=promote sh ci/deploy-packages.sh
+
+  # environment: prod — promote to production (branch main)
+  deploy_prod:
+    if: false
+    # intended: (push to main) || (workflow_dispatch && inputs.job == 'deploy_prod')
+    runs-on: ubuntu-latest
+    environment: prod
+    container:
+      image: ${{ env.SAP_PIPE_IMAGE }}
+      options: --entrypoint ""
+    env:
+      CI_PROJECT_DIR: ${{ github.workspace }}
+      CI_ENVIRONMENT_NAME: prod
+      CI_COMMIT_REF_NAME: ${{ github.ref_name }}
+      CI_COMMIT_BEFORE_SHA: ${{ github.event.before }}
+      CI_COMMIT_SHA: ${{ github.sha }}
+      DEPLOY_PACKAGE: ${{ inputs.deploy_package }}
+      SAP_PIPE_TMN_HOST: ${{ secrets.CPI_TMN_HOST }}
+      SAP_PIPE_OAUTH_HOST: ${{ secrets.CPI_OAUTH_HOST }}
+      SAP_PIPE_OAUTH_PATH: /oauth/token
+      SAP_PIPE_OAUTH_CLIENTID: ${{ secrets.CPI_OAUTH_CLIENT_ID }}
+      SAP_PIPE_OAUTH_CLIENTSECRET: ${{ secrets.CPI_OAUTH_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require CPI secrets
+        run: |
+          if [ -z "$SAP_PIPE_TMN_HOST" ] || [ -z "$SAP_PIPE_OAUTH_HOST" ] || [ -z "$SAP_PIPE_OAUTH_CLIENTID" ] || [ -z "$SAP_PIPE_OAUTH_CLIENTSECRET" ]; then
+            echo "Missing CPI secrets for environment $CI_ENVIRONMENT_NAME"
+            exit 1
+          fi
+      - run: MODE=promote sh ci/deploy-packages.sh
+
+  # environment: dev — scheduled tenant → Git sync
+  sync_from_tenant:
+    if: false
+    # intended: (schedule on refs/heads/dev) || (workflow_dispatch && inputs.job == 'sync_from_tenant')
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: write
+    container:
+      image: ${{ env.SAP_PIPE_IMAGE }}
+      options: --entrypoint ""
+    env:
+      CI_PROJECT_DIR: ${{ github.workspace }}
+      CI_ENVIRONMENT_NAME: dev
+      CI_COMMIT_REF_NAME: ${{ github.ref_name }}
+      SAP_PIPE_DIR_GIT_REPO: ${{ github.workspace }}
+      SAP_PIPE_TARGET: git
+      SAP_PIPE_GIT_COMMIT_USER: github-actions
+      SAP_PIPE_GIT_COMMIT_EMAIL: github-actions@users.noreply.github.com
+      SAP_PIPE_GIT_COMMIT_MSG: Sync packages from tenant
+      SAP_PIPE_TMN_HOST: ${{ secrets.CPI_TMN_HOST }}
+      SAP_PIPE_OAUTH_HOST: ${{ secrets.CPI_OAUTH_HOST }}
+      SAP_PIPE_OAUTH_PATH: /oauth/token
+      SAP_PIPE_OAUTH_CLIENTID: ${{ secrets.CPI_OAUTH_CLIENT_ID }}
+      SAP_PIPE_OAUTH_CLIENTSECRET: ${{ secrets.CPI_OAUTH_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Sync packages
+        run: |
+          set -e
+          FAILED_PKGS=""
+          while IFS= read -r pkg; do
+            [ -n "$pkg" ] || continue
+            echo "======== Syncing package: $pkg ========"
+            if sap-pipe sync \
+              --package-id "$pkg" \
+              --dir-git-repo "$CI_PROJECT_DIR" \
+              --dir-artifacts "$CI_PROJECT_DIR/$pkg" \
+              --target git \
+              --git-skip-commit \
+              --sync-package-details \
+              --draft-handling SKIP
+            then
+              echo "OK: $pkg"
+            else
+              echo "FAILED: $pkg"
+              FAILED_PKGS="${FAILED_PKGS} ${pkg}"
+            fi
+          done < <(python3 -c "import json; print('\n'.join(json.load(open('${PACKAGES_FILE}'))['packages']))")
+          git config user.name "$SAP_PIPE_GIT_COMMIT_USER"
+          git config user.email "$SAP_PIPE_GIT_COMMIT_EMAIL"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "$SAP_PIPE_GIT_COMMIT_MSG"
+            git push origin "HEAD:dev"
+          fi
+          if [ -n "$FAILED_PKGS" ]; then
+            echo "Failed packages:${FAILED_PKGS}"
+            exit 1
+          fi
+
+  # environment: dev — full snapshot onto dev
+  snapshot_tenant:
+    if: false
+    # intended: github.event_name == 'workflow_dispatch' && inputs.job == 'snapshot_tenant'
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: write
+    container:
+      image: ${{ env.SAP_PIPE_IMAGE }}
+      options: --entrypoint ""
+    env:
+      CI_PROJECT_DIR: ${{ github.workspace }}
+      CI_ENVIRONMENT_NAME: dev
+      SAP_PIPE_DIR_GIT_REPO: ${{ github.workspace }}
+      SAP_PIPE_GIT_COMMIT_USER: github-actions
+      SAP_PIPE_GIT_COMMIT_EMAIL: github-actions@users.noreply.github.com
+      SAP_PIPE_TMN_HOST: ${{ secrets.CPI_TMN_HOST }}
+      SAP_PIPE_OAUTH_HOST: ${{ secrets.CPI_OAUTH_HOST }}
+      SAP_PIPE_OAUTH_PATH: /oauth/token
+      SAP_PIPE_OAUTH_CLIENTID: ${{ secrets.CPI_OAUTH_CLIENT_ID }}
+      SAP_PIPE_OAUTH_CLIENTSECRET: ${{ secrets.CPI_OAUTH_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Snapshot
+        run: |
+          BEFORE_SHA=$(git rev-parse HEAD)
+          sap-pipe snapshot
+          AFTER_SHA=$(git rev-parse HEAD)
+          if [ "$BEFORE_SHA" != "$AFTER_SHA" ]; then
+            git push origin "HEAD:dev"
+          fi
